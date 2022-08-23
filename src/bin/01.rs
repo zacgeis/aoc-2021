@@ -19,7 +19,7 @@ fn part1() {
     let iter2 = input.iter().skip(1);
     let total_count = iter1.zip(iter2).filter(|(a, b)| a < b).count();
 
-    println!("{}", total_count);
+    println!("part1: {}", total_count);
 }
 
 fn part2() {
@@ -29,5 +29,5 @@ fn part2() {
     let iter2 = input.iter().skip(3);
     let total_count = iter1.zip(iter2).filter(|(a, b)| a < b).count();
 
-    println!("{}", total_count);
+    println!("part2: {}", total_count);
 }
