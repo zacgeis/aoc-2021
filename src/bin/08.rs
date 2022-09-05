@@ -99,11 +99,11 @@ fn part2() {
             .find(|pattern| pattern.len() == 5 && pattern != &three && pattern != &five)
             .unwrap();
 
-        let digits = vec![zero, one, two, three, four, five, six, seven, eight, nine];
+        let digits = [zero, one, two, three, four, five, six, seven, eight, nine];
 
         let mut result = 0;
         for value in values {
-            let pos = digits.iter().position(|&pattern| pattern == &value);
+            let pos = digits.iter().cloned().position(|pattern| pattern == &value);
             match pos {
                 None => panic!("couldn't find pattern"),
                 Some(i) => {
