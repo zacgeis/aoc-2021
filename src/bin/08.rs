@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
 
@@ -42,7 +41,7 @@ fn part1() {
     let input = get_input();
 
     let mut total = 0;
-    for (patterns, values) in input {
+    for (_, values) in input {
         for value in values {
             match value.len() {
                 2 => total += 1,
