@@ -28,23 +28,22 @@ fn find_paths<'a>(
     current: &'a str,
     mut path: Vec<&'a str>,
     mut visited: HashSet<&'a str>,
-    mut exception: Option<&'a str>,
+    allow_double: bool,
 ) -> Vec<Vec<&'a str>> {
     if current == "end" {
         path.push(current);
         vec![path]
     } else if visited.contains(current) {
-        vec![]
+        if allow_double && current != "start" {
+            let mut new_visited = visited.clone();
+            new_visited.remove(current);
+            find_paths(graph, current, path.clone(), new_visited, false)
+        } else {
+            vec![]
+        }
     } else {
         path.push(current);
-        let mut record_visisted = current.chars().all(char::is_lowercase);
-        if let Some(e) = exception {
-            if e == current {
-                exception = None;
-                record_visisted = false;
-            }
-        }
-        if record_visisted {
+        if current.chars().all(char::is_lowercase) {
             visited.insert(current);
         }
         let connections = &graph[&current.to_string()];
@@ -52,7 +51,7 @@ fn find_paths<'a>(
         for connection in connections {
             let new_path = path.clone();
             let new_visited = visited.clone();
-            for new_path in find_paths(graph, connection, new_path, new_visited, exception) {
+            for new_path in find_paths(graph, connection, new_path, new_visited, allow_double) {
                 new_paths.push(new_path);
             }
         }
@@ -66,7 +65,7 @@ fn part1() {
         Some(end) => end,
         None => panic!("start not found?"),
     };
-    let paths = find_paths(&graph, start, Default::default(), Default::default(), None);
+    let paths = find_paths(&graph, start, Default::default(), Default::default(), false);
     println!("path1: {}", paths.len());
 }
 
@@ -76,21 +75,6 @@ fn part2() {
         Some(end) => end,
         None => panic!("start not found?"),
     };
-
-    let mut paths: HashSet<String> = Default::default();
-    for key in graph.keys() {
-        if key.chars().all(char::is_lowercase) && key != "start" && key != "end" {
-            for path in find_paths(
-                &graph,
-                start,
-                Default::default(),
-                Default::default(),
-                Some(key),
-            ) {
-                paths.insert(path.join(","));
-            }
-        }
-    }
-
-    println!("path1: {}", paths.len());
+    let paths = find_paths(&graph, start, Default::default(), Default::default(), true);
+    println!("path2: {}", paths.len());
 }
