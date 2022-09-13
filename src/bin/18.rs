@@ -2,7 +2,7 @@ use std::fs;
 use std::iter::Peekable;
 use std::str::FromStr;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum SNum {
     Pair(Box<SNum>, Box<SNum>),
     Val(u32),
@@ -52,43 +52,33 @@ fn add(left: Box<SNum>, right: Box<SNum>) -> Box<SNum> {
 // find node to explode.
 // then do a pre-order and post-order traversal to add the right and left values.
 // then update the node to be 0.
-fn try_explode(s: &mut Box<SNum>, depth: u8) -> (Option<u32>, Option<u32>, bool) {
-    match s.as_mut() {
-        SNum::Val(_) => (None, None, false),
-        SNum::Pair(left, right) => {
-            if depth == 4 {
-                let mut left_value: Option<u32> = None;
-                let mut right_value: Option<u32> = None;
-                if let SNum::Val(value) = left.as_ref() {
-                    left_value = Some(*value);
-                }
-                if let SNum::Val(value) = right.as_ref() {
-                    right_value = Some(*value);
-                }
-                *s.as_mut() = SNum::Val(0);
-                (left_value, right_value, true)
+fn in_order<'a>(
+    s: &'a mut Box<SNum>,
+    depth: u32,
+    out: &mut Vec<&'a mut u32>,
+    target: &mut Option<(u32, u32, usize)>,
+) {
+    if depth == 4 && *target == None {
+        if let SNum::Pair(left, right) = s.as_ref() {
+            let a = if let SNum::Val(a) = left.as_ref() {
+                *a
             } else {
-                let (mut left_value, mut right_value, mut exploded) = try_explode(left, depth + 1);
-                if left_value != None || right_value != None {
-                    if let SNum::Val(value) = right.as_mut() {
-                        if let Some(v) = right_value {
-                            *value += v;
-                            right_value = None;
-                        }
-                    }
-                } else {
-                    (left_value, right_value, exploded) = try_explode(right, depth + 1);
-                    if left_value != None || right_value != None {
-                        if let SNum::Val(value) = left.as_mut() {
-                            if let Some(v) = left_value {
-                                *value += v;
-                                left_value = None;
-                            }
-                        }
-                    }
-                }
-                (left_value, right_value, exploded)
-            }
+                0
+            };
+            let b = if let SNum::Val(b) = right.as_ref() {
+                *b
+            } else {
+                0
+            };
+            *target = Some((a, b, out.len()));
+            *s.as_mut() = SNum::Val(0);
+        }
+    }
+    match s.as_mut() {
+        SNum::Val(v) => out.push(v),
+        SNum::Pair(left, right) => {
+            in_order(left, depth + 1, out, target);
+            in_order(right, depth + 1, out, target);
         }
     }
 }
@@ -101,6 +91,9 @@ fn part1() {
     let mut result = pairs.next().unwrap();
     // for pair in pairs {}
     println!("pre: {:?}", result);
-    println!("explode: {:?}", try_explode(&mut result, 0));
-    println!("part1: {:?}", result);
+    let mut values = vec![];
+    let mut target = None;
+    in_order(&mut result, 0, &mut values, &mut target);
+    // println!("explode: {:?}", try_explode(&mut result, 0));
+    println!("part1: {:?}", &values);
 }
