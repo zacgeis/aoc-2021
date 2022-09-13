@@ -1,8 +1,7 @@
 use std::fs;
 use std::iter::Peekable;
-use std::str::FromStr;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 enum SNum {
     Pair(Box<SNum>, Box<SNum>),
     Val(u32),
@@ -43,57 +42,119 @@ fn get_input() -> Vec<Box<SNum>> {
 
 fn main() {
     part1();
+    part2();
 }
 
 fn add(left: Box<SNum>, right: Box<SNum>) -> Box<SNum> {
     Box::new(SNum::Pair(left, right))
 }
 
-// find node to explode.
-// then do a pre-order and post-order traversal to add the right and left values.
-// then update the node to be 0.
-fn in_order<'a>(
+fn explode_in_order<'a>(
     s: &'a mut Box<SNum>,
     depth: u32,
-    out: &mut Vec<&'a mut u32>,
-    target: &mut Option<(u32, u32, usize)>,
+    prev: &mut Option<&'a mut u32>,
+    forward_value: &mut Option<u32>,
+    modified: &mut bool,
 ) {
-    if depth == 4 && *target == None {
+    if depth == 4 && !*modified {
         if let SNum::Pair(left, right) = s.as_ref() {
-            let a = if let SNum::Val(a) = left.as_ref() {
-                *a
-            } else {
-                0
-            };
-            let b = if let SNum::Val(b) = right.as_ref() {
-                *b
-            } else {
-                0
-            };
-            *target = Some((a, b, out.len()));
+            if let SNum::Val(left) = left.as_ref() {
+                if let Some(prev) = prev {
+                    **prev += *left;
+                }
+            }
+            if let SNum::Val(right) = right.as_ref() {
+                *forward_value = Some(*right);
+            }
             *s.as_mut() = SNum::Val(0);
+            *modified = true;
+            // return early to avoid applying the forward_value to this 0 value.
+            return;
         }
     }
     match s.as_mut() {
-        SNum::Val(v) => out.push(v),
+        SNum::Val(v) => {
+            if let Some(num_value) = forward_value {
+                *v += *num_value;
+                *forward_value = None;
+            }
+            *prev = Some(v)
+        }
         SNum::Pair(left, right) => {
-            in_order(left, depth + 1, out, target);
-            in_order(right, depth + 1, out, target);
+            explode_in_order(left, depth + 1, prev, forward_value, modified);
+            explode_in_order(right, depth + 1, prev, forward_value, modified);
         }
     }
 }
 
-fn reduce(s: &mut Box<SNum>) {}
+fn explode(s: &mut Box<SNum>) -> bool {
+    let mut prev: Option<&mut u32> = None;
+    let mut forward_value: Option<u32> = None;
+    let mut modified = false;
+    explode_in_order(s, 0, &mut prev, &mut forward_value, &mut modified);
+    modified
+}
+
+fn split(s: &mut Box<SNum>) -> bool {
+    let replace = match s.as_ref() {
+        SNum::Val(v) => *v,
+        SNum::Pair(_, _) => 0,
+    };
+    if replace >= 10 {
+        *s.as_mut() = SNum::Pair(
+            Box::new(SNum::Val(replace / 2)),
+            Box::new(SNum::Val(
+                replace / 2 + (if replace % 2 != 0 { 1 } else { 0 }),
+            )),
+        );
+        true
+    } else {
+        match s.as_mut() {
+            SNum::Val(_) => false,
+            SNum::Pair(left, right) => split(left) || split(right),
+        }
+    }
+}
+
+fn reduce(s: &mut Box<SNum>) {
+    while explode(s) || split(s) {}
+}
+
+fn magnitude(s: &Box<SNum>) -> u32 {
+    match s.as_ref() {
+        SNum::Val(v) => *v,
+        SNum::Pair(left, right) => 3 * magnitude(left) + 2 * magnitude(right),
+    }
+}
 
 fn part1() {
     let input = get_input();
     let mut pairs = input.into_iter();
     let mut result = pairs.next().unwrap();
-    // for pair in pairs {}
-    println!("pre: {:?}", result);
-    let mut values = vec![];
-    let mut target = None;
-    in_order(&mut result, 0, &mut values, &mut target);
-    // println!("explode: {:?}", try_explode(&mut result, 0));
-    println!("part1: {:?}", &values);
+
+    for pair in pairs {
+        result = add(result, pair);
+        reduce(&mut result);
+    }
+
+    println!("part1: {}", magnitude(&result));
+}
+
+fn part2() {
+    let mut answer = 0;
+    for (i, num_a) in get_input().into_iter().enumerate() {
+        for (j, num_b) in get_input().into_iter().enumerate() {
+            let num_a = num_a.clone();
+            if i == j {
+                continue;
+            }
+            let mut result = add(num_a, num_b);
+            reduce(&mut result);
+            let m = magnitude(&result);
+            if m > answer {
+                answer = m;
+            }
+        }
+    }
+    println!("part2: {}", answer);
 }
