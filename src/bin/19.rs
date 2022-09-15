@@ -34,4 +34,11 @@ fn main() {
 fn part1() {
     let transforms = get_transforms();
     println!("{}", transforms.len());
+    // 1. start with scanner 0. transform all of the beacon locations and store them.
+    // 2. iterate over beacons from the next scanner.
+    //    for each beacon, diff it against one of the beacons in the 0 list.
+    //    apply that diff to all other beacons in the list and see if we get 12 matches.
+    //    if not, diff against the next entry.
+    //    should only be O(27 * 27 * 27)
+    // Scanner 0 is (0, 0, 0) so the offsets are easy.
 }
