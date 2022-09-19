@@ -97,7 +97,7 @@ fn get_input() -> Grid {
 
 fn main() {
     println!("part1: {}", solve(2));
-    println!("part1: {}", solve(50));
+    println!("part2: {}", solve(50));
 }
 
 fn solve(gens: i32) -> usize {
