@@ -53,6 +53,22 @@ fn apply_transform(pos: &[i32; 3], transform: &[i32; 3]) -> [i32; 3] {
     result
 }
 
+fn dist(a: &[i32; 3]) -> i32 {
+    a[0] + a[1] + a[2]
+}
+
+fn abs(a: &[i32; 3]) -> [i32; 3] {
+    [a[0].abs(), a[1].abs(), a[2].abs()]
+}
+
+fn sub(a: &[i32; 3], b: &[i32; 3]) -> [i32; 3] {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+
+fn add(a: &[i32; 3], b: &[i32; 3]) -> [i32; 3] {
+    [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+}
+
 fn get_input() -> Vec<Vec<[i32; 3]>> {
     let input = fs::read_to_string("inputs/19.txt").unwrap();
     let mut beacons = vec![];
@@ -79,18 +95,6 @@ fn get_input() -> Vec<Vec<[i32; 3]>> {
     scanners
 }
 
-fn main() {
-    part1();
-}
-
-fn sub(a: &[i32; 3], b: &[i32; 3]) -> [i32; 3] {
-    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-
-fn add(a: &[i32; 3], b: &[i32; 3]) -> [i32; 3] {
-    [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
-}
-
 fn find_offset(origin_beacons: &[[i32; 3]], beacons: &[[i32; 3]]) -> Option<([i32; 3], [i32; 3])> {
     let transforms = get_transforms();
     for transform in &transforms {
@@ -115,16 +119,18 @@ fn find_offset(origin_beacons: &[[i32; 3]], beacons: &[[i32; 3]]) -> Option<([i3
     None
 }
 
-fn part1() {
+fn main() {
     let mut scanners = get_input().into_iter();
     let mut origin_beacons = scanners.next().unwrap();
     let mut scanners: Vec<_> = scanners.collect();
+    let mut scanner_positions = vec![];
     while !scanners.is_empty() {
         let mut new_scanners: Vec<Vec<[i32; 3]>> = vec![];
         for beacons in scanners {
             match find_offset(&origin_beacons, &beacons) {
                 Some((origin, transform)) => {
                     for beacon in &beacons {
+                        scanner_positions.push(origin);
                         let transformed = add(&origin, &apply_transform(beacon, &transform));
                         if !origin_beacons.contains(&transformed) {
                             origin_beacons.push(transformed);
@@ -138,7 +144,20 @@ fn part1() {
         }
         scanners = new_scanners;
     }
+
     println!("part1: {}", origin_beacons.len());
+
+    let mut p2 = 0;
+    for a in &scanner_positions {
+        for b in &scanner_positions {
+            let d = dist(&abs(&sub(a, b)));
+            if d > p2 {
+                p2 = d;
+            }
+        }
+    }
+
+    println!("part2: {}", p2);
 }
 
 #[test]
