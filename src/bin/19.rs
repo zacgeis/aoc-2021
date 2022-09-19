@@ -4,25 +4,36 @@ const X: i32 = 1;
 const Y: i32 = 2;
 const Z: i32 = 3;
 
-fn rot(start: [i32; 3]) -> Vec<[i32; 3]> {
-    let [a, b, c] = start;
-    vec![[a, b, c], [a, -b, -c], [a, -c, b], [a, c, -b]]
+fn rot_x(start: [i32; 3]) -> [i32; 3] {
+    let [x, y, z] = start;
+    [x, z, -y]
+}
+
+fn rot_y(start: [i32; 3]) -> [i32; 3] {
+    let [x, y, z] = start;
+    [z, y, -x]
 }
 
 fn get_transforms() -> Vec<[i32; 3]> {
-    let mut result = vec![];
-    for i in [-1, 1] {
-        for a in [X, Y, Z] {
-            let mut inner = match a {
-                X => rot([i * a, Y, Z]),
-                Y => rot([i * a, X, Z]),
-                Z => rot([i * a, X, Y]),
-                _ => unreachable!(),
-            };
-            result.append(&mut inner);
-        }
+    let origin = [X, Y, Z];
+    let bases = [
+        origin,
+        rot_y(origin),
+        rot_y(rot_y(origin)),
+        rot_y(rot_y(rot_y(origin))),
+        rot_y(rot_x(origin)),
+        rot_y(rot_y(rot_y(rot_x(origin)))),
+    ];
+
+    let mut results = vec![];
+    for base in bases {
+        results.push(base);
+        results.push(rot_x(base));
+        results.push(rot_x(rot_x(base)));
+        results.push(rot_x(rot_x(rot_x(base))));
     }
-    result
+
+    results
 }
 
 fn apply_transform(pos: &[i32; 3], transform: &[i32; 3]) -> [i32; 3] {
@@ -62,6 +73,9 @@ fn get_input() -> Vec<Vec<[i32; 3]>> {
             beacons.push([values[0], values[1], values[2]]);
         }
     }
+    if !beacons.is_empty() {
+        scanners.push(beacons);
+    }
     scanners
 }
 
@@ -69,18 +83,62 @@ fn main() {
     part1();
 }
 
-fn part1() {
+fn sub(a: &[i32; 3], b: &[i32; 3]) -> [i32; 3] {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+
+fn add(a: &[i32; 3], b: &[i32; 3]) -> [i32; 3] {
+    [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+}
+
+fn find_offset(origin_beacons: &[[i32; 3]], beacons: &[[i32; 3]]) -> Option<([i32; 3], [i32; 3])> {
     let transforms = get_transforms();
-    println!("{}", transforms.len());
-    // 1. start with scanner 0. transform all of the beacon locations and store them.
-    // 2. iterate over beacons from the next scanner.
-    //    for each beacon, diff it against one of the beacons in the 0 list.
-    //    apply that diff to all other beacons in the list and see if we get 12 matches.
-    //    if not, diff against the next entry.
-    //    should only be O(27 * 27 * 27)
-    // Scanner 0 is (0, 0, 0) so the offsets are easy.
-    let scanners = get_input();
-    println!("{:?}", &scanners[0]);
+    for transform in &transforms {
+        for beacon in beacons {
+            let transformed_beacon = apply_transform(beacon, transform);
+            for origin_beacon in origin_beacons {
+                let possible_origin = sub(origin_beacon, &transformed_beacon);
+                let mut count = 0;
+                for second_beacon in beacons {
+                    let second_beacon =
+                        add(&possible_origin, &apply_transform(second_beacon, transform));
+                    if origin_beacons.contains(&second_beacon) {
+                        count += 1;
+                        if count == 12 {
+                            return Some((possible_origin, *transform));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn part1() {
+    let mut scanners = get_input().into_iter();
+    let mut origin_beacons = scanners.next().unwrap();
+    let mut scanners: Vec<_> = scanners.collect();
+    while !scanners.is_empty() {
+        let mut new_scanners: Vec<Vec<[i32; 3]>> = vec![];
+        for beacons in scanners {
+            match find_offset(&origin_beacons, &beacons) {
+                Some((origin, transform)) => {
+                    for beacon in &beacons {
+                        let transformed = add(&origin, &apply_transform(beacon, &transform));
+                        if !origin_beacons.contains(&transformed) {
+                            origin_beacons.push(transformed);
+                        }
+                    }
+                }
+                None => {
+                    new_scanners.push(beacons);
+                }
+            }
+        }
+        scanners = new_scanners;
+    }
+    println!("part1: {}", origin_beacons.len());
 }
 
 #[test]
