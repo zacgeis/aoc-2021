@@ -53,7 +53,7 @@ fn part1() {
     println!("part1: {}", score);
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Hash, Eq, PartialEq)]
 struct PlayerState {
     space: u8,
     score: u8,
@@ -92,34 +92,34 @@ impl PlayerState {
     }
 }
 
-// memoize space and score for both players on count == 3.
-// return win stats.
-// also memoize the turns?
-fn play(wins: &mut (u64, u64), p1_turn: bool, p1: PlayerState, p2: PlayerState) {
-    let winning_score = 11; // 21
-    if p1.score >= winning_score {
-        wins.0 += 1;
-    } else if p2.score >= winning_score {
-        wins.1 += 1;
-    } else if p1.count == 3 {
-        play(wins, false, p1.turn(), p2);
-    } else if p2.count == 3 {
-        play(wins, true, p1, p2.turn());
-    } else if p1_turn {
-        play(wins, p1_turn, p1.roll(1), p2);
-        play(wins, p1_turn, p1.roll(2), p2);
-        play(wins, p1_turn, p1.roll(3), p2);
-    } else {
-        play(wins, p1_turn, p1, p2.roll(1));
-        play(wins, p1_turn, p1, p2.roll(2));
-        play(wins, p1_turn, p1, p2.roll(3));
+fn play(
+    cache: &mut HashMap<(PlayerState, PlayerState), (u64, u64)>,
+    p1: PlayerState,
+    p2: PlayerState,
+) -> (u64, u64) {
+    if let Some(result) = cache.get(&(p1, p2)) {
+        return *result;
     }
+    let result;
+    if p2.score >= 21 {
+        result = (0, 1)
+    } else if p1.count == 3 {
+        let (a, b) = play(cache, p2, p1.turn());
+        result = (b, a)
+    } else {
+        let (a1, b1) = play(cache, p1.roll(1), p2);
+        let (a2, b2) = play(cache, p1.roll(2), p2);
+        let (a3, b3) = play(cache, p1.roll(3), p2);
+        result = (a1 + a2 + a3, b1 + b2 + b3)
+    }
+    cache.insert((p1, p2), result);
+    result
 }
 
 fn part2() {
-    let mut wins = (0, 0);
-    let p1 = PlayerState::new(4);
+    let p1 = PlayerState::new(7);
     let p2 = PlayerState::new(8);
-    play(&mut wins, true, p1, p2);
-    println!("wins2: {:?}", wins);
+    let mut cache = HashMap::new();
+    let (p1_wins, p2_wins) = play(&mut cache, p1, p2);
+    println!("part2: {}", std::cmp::max(p1_wins, p2_wins));
 }
