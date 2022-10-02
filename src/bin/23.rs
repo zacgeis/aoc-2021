@@ -1,45 +1,68 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs;
 
-#[derive(Eq, PartialEq)]
-enum Space {
-    Open,
+#[derive(Hash, Eq, PartialEq, Clone, Copy)]
+enum Amphipods {
     Amber,
     Bronze,
     Copper,
     Desert,
 }
+#[derive(Hash, Eq, PartialEq)]
+enum Space {
+    Open,
+    Used(Amphipods),
+}
 
-impl Space {
+impl Amphipods {
+    const VALUES: [Self; 4] = [Self::Amber, Self::Bronze, Self::Copper, Self::Desert];
+
     fn from_char(c: char) -> Self {
         match c {
-            '.' => Space::Open,
-            'A' => Space::Amber,
-            'B' => Space::Bronze,
-            'C' => Space::Copper,
-            'D' => Space::Desert,
+            'A' => Amphipods::Amber,
+            'B' => Amphipods::Bronze,
+            'C' => Amphipods::Copper,
+            'D' => Amphipods::Desert,
             _ => panic!("unexpected char found"),
         }
     }
 
     fn to_char(&self) -> char {
         match self {
-            Space::Open => '.',
-            Space::Amber => 'A',
-            Space::Bronze => 'B',
-            Space::Copper => 'C',
-            Space::Desert => 'D',
+            Amphipods::Amber => 'A',
+            Amphipods::Bronze => 'B',
+            Amphipods::Copper => 'C',
+            Amphipods::Desert => 'D',
         }
     }
 }
 
-type Move = ((u8, u8), (u8, u8));
-struct Room {
-    data: HashMap<(u8, u8), Space>,
+impl Space {
+    fn from_char(c: char) -> Self {
+        match c {
+            '.' => Space::Open,
+            c => Space::Used(Amphipods::from_char(c)),
+        }
+    }
+
+    fn to_char(&self) -> char {
+        match self {
+            Space::Open => '.',
+            Space::Used(a) => a.to_char(),
+        }
+    }
 }
 
-impl fmt::Debug for Room {
+type Pos = (u8, u8);
+type Move = (Pos, u8); // and cost.
+struct Map {
+    data: HashMap<Pos, Space>,
+    homes: HashMap<Amphipods, HashSet<Pos>>,
+    move_only: HashSet<Pos>,
+}
+
+impl fmt::Debug for Map {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for y in 0..3 {
             for x in 0..11 {
@@ -57,7 +80,7 @@ impl fmt::Debug for Room {
     }
 }
 
-impl Room {
+impl Map {
     fn new(mut initial_positions: Vec<char>) -> Self {
         initial_positions.reverse();
         let mut data = HashMap::new();
@@ -72,23 +95,69 @@ impl Room {
             let x = 2 + i * 2;
             data.insert((x, 2), Space::from_char(initial_positions.pop().unwrap()));
         }
-        Room { data }
+        let mut homes = HashMap::new();
+        let mut move_only = HashSet::new();
+        for (i, a) in Amphipods::VALUES.iter().enumerate() {
+            let x = 2 + i * 2;
+            move_only.insert((x as u8, 0 as u8));
+            let mut section = HashSet::new();
+            section.insert((x as u8, 1 as u8));
+            section.insert((x as u8, 2 as u8));
+            homes.insert(*a, section);
+        }
+        Map { data, homes, move_only }
     }
 
-    fn possible_moves(&self) -> Vec<Move> {
-        todo!()
-    }
-
-    fn apply_move(&self, m: &Move) -> Self {
-        todo!()
+    fn possible_moves(&self, pos: Pos) -> Vec<Move> {
+        let s = self.data.get(&pos).unwrap_or(&Space::Open);
+        match s {
+            Space::Open => vec![],
+            Space::Used(a) => {
+                // in home, but need to move to let bottom one out.
+                //   move out.
+                // in home and are the bottom.
+                //   do nothing.
+                // are in a different home.
+                //   move out.
+                // are in the hallway.
+                //   only move into home.
+                // can't block any of the rooms with any moves.
+                // can't move into a room that contains one of the wrong types.
+                if self.homes[a].contains(&pos) {
+                    if pos.1 == 1 {
+                        let other = &self.data[&(pos.0, 2)];
+                        match other {
+                            Space::Open => (),
+                            Space::Used(other) => {
+                                if a != other {
+                                    // need to let the bottom out.
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    if pos.1 > 0 {
+                        // in another home.
+                    } else {
+                        // in the hallway. can only move into home.
+                    }
+                }
+                todo!()
+            }
+        }
     }
 
     fn is_complete(&self) -> bool {
-        for (i, c) in [Space::Amber, Space::Bronze, Space::Copper, Space::Desert].iter().enumerate() {
+        for (i, c) in Amphipods::VALUES.iter().enumerate() {
             let top = self.data.get(&(2 + i as u8 * 2, 1)).unwrap();
             let bot = self.data.get(&(2 + i as u8 * 2, 2)).unwrap();
-            if top != c || bot != c {
-                return false;
+            match (top, bot) {
+                (Space::Used(a), Space::Used(b)) => {
+                    if a != c || b != c {
+                        return false;
+                    }
+                }
+                _ => (),
             }
         }
         true
@@ -98,7 +167,7 @@ impl Room {
 fn main() {
     let initial_positions = vec!['B', 'C', 'B', 'D', 'A', 'D', 'C', 'A'];
     // let initial_positions = vec!['A', 'B', 'C', 'D', 'A', 'B', 'C', 'D'];
-    let room = Room::new(initial_positions);
-    println!("{:?}", &room);
-    println!("complete: {}", room.is_complete());
+    let map = Map::new(initial_positions);
+    println!("{:?}", &map);
+    println!("complete: {}", map.is_complete());
 }
