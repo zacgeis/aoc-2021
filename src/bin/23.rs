@@ -2,17 +2,12 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs;
 
-#[derive(Hash, Eq, PartialEq, Clone, Copy)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 enum Amphipods {
     Amber,
     Bronze,
     Copper,
     Desert,
-}
-#[derive(Hash, Eq, PartialEq)]
-enum Space {
-    Open,
-    Used(Amphipods),
 }
 
 impl Amphipods {
@@ -38,136 +33,76 @@ impl Amphipods {
     }
 }
 
-impl Space {
-    fn from_char(c: char) -> Self {
-        match c {
-            '.' => Space::Open,
-            c => Space::Used(Amphipods::from_char(c)),
-        }
-    }
-
-    fn to_char(&self) -> char {
-        match self {
-            Space::Open => '.',
-            Space::Used(a) => a.to_char(),
-        }
-    }
+#[derive(Debug)]
+enum Node {
+    Hallway(Option<Amphipods>),
+    HallwayMoveOnly,
+    Home(Amphipods, Option<Amphipods>),
 }
 
-type Pos = (u8, u8);
-type Move = (Pos, u8); // and cost.
-struct Map {
-    data: HashMap<Pos, Space>,
-    homes: HashMap<Amphipods, HashSet<Pos>>,
-    move_only: HashSet<Pos>,
+#[derive(Debug)]
+struct Graph {
+    nodes: Vec<Node>,
+    edges: Vec<Vec<usize>>,
 }
 
-impl fmt::Debug for Map {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for y in 0..3 {
-            for x in 0..11 {
-                let c = match self.data.get(&(x, y)) {
-                    Some(space) => space.to_char(),
-                    None => '#',
-                };
-                write!(f, "{}", c)?;
-            }
-            if y != 2 {
-                write!(f, "\n")?;
-            }
-        }
-        Ok(())
-    }
-}
-
-impl Map {
-    fn new(mut initial_positions: Vec<char>) -> Self {
-        initial_positions.reverse();
-        let mut data = HashMap::new();
+impl Graph {
+    fn new() -> Self {
+        let mut nodes = vec![];
+        let mut edges = vec![];
+        let room_x = [2, 4, 6, 8];
         for i in 0..11 {
-            data.insert((i, 0), Space::Open);
+            let node = if room_x.contains(&i) {
+                Node::HallwayMoveOnly
+            } else {
+                Node::Hallway(None)
+            };
+            nodes.push(node);
+            let edge = if i == 0 {
+                vec![1]
+            } else if i == 10 {
+                vec![9]
+            } else {
+                vec![i - 1, i + 1]
+            };
+            edges.push(edge);
         }
-        for i in 0..4 {
-            let x = 2 + i * 2;
-            data.insert((x, 1), Space::from_char(initial_positions.pop().unwrap()));
-        }
-        for i in 0..4 {
-            let x = 2 + i * 2;
-            data.insert((x, 2), Space::from_char(initial_positions.pop().unwrap()));
-        }
-        let mut homes = HashMap::new();
-        let mut move_only = HashSet::new();
         for (i, a) in Amphipods::VALUES.iter().enumerate() {
-            let x = 2 + i * 2;
-            move_only.insert((x as u8, 0 as u8));
-            let mut section = HashSet::new();
-            section.insert((x as u8, 1 as u8));
-            section.insert((x as u8, 2 as u8));
-            homes.insert(*a, section);
+            let node_top = Node::Home(*a, None);
+            let node_top_i = nodes.len();
+            nodes.push(node_top);
+
+            let node_bot = Node::Home(*a, None);
+            let node_bot_i = nodes.len();
+            nodes.push(node_bot);
+
+            let hallway_i = 2 + (i * 2);
+            edges[hallway_i].push(node_top_i);
+            edges.push(vec![hallway_i, node_bot_i]);
+            edges.push(vec![node_top_i]);
         }
-        Map { data, homes, move_only }
+        Graph { nodes, edges }
     }
 
-    fn possible_moves(&self, pos: Pos) -> Vec<Move> {
-        let s = self.data.get(&pos).unwrap_or(&Space::Open);
-        match s {
-            Space::Open => vec![],
-            Space::Used(a) => {
-                // in home, but need to move to let bottom one out.
-                //   move out.
-                // in home and are the bottom.
-                //   do nothing.
-                // are in a different home.
-                //   move out.
-                // are in the hallway.
-                //   only move into home.
-                // can't block any of the rooms with any moves.
-                // can't move into a room that contains one of the wrong types.
-                if self.homes[a].contains(&pos) {
-                    if pos.1 == 1 {
-                        let other = &self.data[&(pos.0, 2)];
-                        match other {
-                            Space::Open => (),
-                            Space::Used(other) => {
-                                if a != other {
-                                    // need to let the bottom out.
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    if pos.1 > 0 {
-                        // in another home.
-                    } else {
-                        // in the hallway. can only move into home.
-                    }
+    fn get_homes(&self, a: &Amphipods) -> Vec<usize> {
+        let mut results = vec![];
+        for (i, node) in self.nodes.iter().enumerate() {
+            if let Node::Home(t, _) =  node {
+                if t == a {
+                    results.push(i);
                 }
-                todo!()
             }
         }
-    }
-
-    fn is_complete(&self) -> bool {
-        for (i, c) in Amphipods::VALUES.iter().enumerate() {
-            let top = self.data.get(&(2 + i as u8 * 2, 1)).unwrap();
-            let bot = self.data.get(&(2 + i as u8 * 2, 2)).unwrap();
-            match (top, bot) {
-                (Space::Used(a), Space::Used(b)) => {
-                    if a != c || b != c {
-                        return false;
-                    }
-                }
-                _ => (),
-            }
-        }
-        true
+        results
     }
 }
 
 fn main() {
     let initial_positions = vec!['B', 'C', 'B', 'D', 'A', 'D', 'C', 'A'];
     // let initial_positions = vec!['A', 'B', 'C', 'D', 'A', 'B', 'C', 'D'];
-    let map = Map::new(initial_positions);
-    println!("{:?}", &map);
-    println!("complete: {}", map.is_complete());
+    let graph = Graph::new();
+    println!("graph: {:?}", graph);
+    // let map = Map::new(initial_positions);
+    // println!("{:?}", &map);
+    // println!("complete: {}", map.is_complete());
 }
