@@ -1,6 +1,4 @@
-use std::collections::{HashMap, HashSet};
-use std::fmt;
-use std::fs;
+use std::collections::HashSet;
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 enum Amphipods {
@@ -23,31 +21,32 @@ impl Amphipods {
         }
     }
 
-    fn to_char(&self) -> char {
+    fn cost(&self) -> u64 {
         match self {
-            Amphipods::Amber => 'A',
-            Amphipods::Bronze => 'B',
-            Amphipods::Copper => 'C',
-            Amphipods::Desert => 'D',
+            Amphipods::Amber => 1,
+            Amphipods::Bronze => 10,
+            Amphipods::Copper => 100,
+            Amphipods::Desert => 1000,
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum Node {
     Hallway(Option<Amphipods>),
     HallwayMoveOnly,
     Home(Amphipods, Option<Amphipods>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Graph {
+    cost: u64,
     nodes: Vec<Node>,
     edges: Vec<Vec<usize>>,
 }
 
 impl Graph {
-    fn new() -> Self {
+    fn new(positions: &[char]) -> Self {
         let mut nodes = vec![];
         let mut edges = vec![];
         let room_x = [2, 4, 6, 8];
@@ -81,16 +80,207 @@ impl Graph {
             edges.push(vec![hallway_i, node_bot_i]);
             edges.push(vec![node_top_i]);
         }
-        Graph { nodes, edges }
+        let mut graph = Graph {
+            cost: 0,
+            nodes,
+            edges,
+        };
+        graph.set_positions(positions);
+        graph
     }
 
-    fn get_homes(&self, a: &Amphipods) -> Vec<usize> {
+    fn set_positions(&mut self, positions: &[char]) {
+        assert!(positions.len() == 8);
+        let (a1, a5) = self.get_homes(&Amphipods::Amber);
+        let (a2, a6) = self.get_homes(&Amphipods::Bronze);
+        let (a3, a7) = self.get_homes(&Amphipods::Copper);
+        let (a4, a8) = self.get_homes(&Amphipods::Desert);
+        let mapping = [a1, a2, a3, a4, a5, a6, a7, a8];
+        for (i, c) in positions.iter().enumerate() {
+            self.place(mapping[i], &Amphipods::from_char(*c));
+        }
+    }
+
+    fn is_complete(&self) -> bool {
+        for node in &self.nodes {
+            if let Node::Home(a, b) = node {
+                match b {
+                    None => return false,
+                    Some(b) => {
+                        if a != b {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+        true
+    }
+
+    fn get_homes(&self, a: &Amphipods) -> (usize, usize) {
+        let mut top = 0;
+        let mut bot = 0;
+        for (i, node) in self.nodes.iter().enumerate() {
+            if let Node::Home(b, _) = node {
+                if a == b {
+                    if self.edges[i].len() == 1 {
+                        bot = i;
+                    } else {
+                        top = i;
+                    }
+                }
+            }
+        }
+        assert!(top != 0);
+        assert!(bot != 0);
+        (top, bot)
+    }
+
+    fn is_home_open(&self, home: usize) -> bool {
+        match self.nodes[home] {
+            Node::Home(_, None) => true,
+            _ => false,
+        }
+    }
+
+    fn are_homes_available(&self, a: &Amphipods) -> bool {
+        let (top_home, bot_home) = self.get_homes(a);
+        if !self.is_home_open(top_home) {
+            let b = self.get_type(top_home).unwrap();
+            if a != b {
+                return false;
+            }
+        }
+        if !self.is_home_open(bot_home) {
+            let b = self.get_type(bot_home).unwrap();
+            if a != b {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn get_type(&self, i: usize) -> Option<&Amphipods> {
+        match &self.nodes[i] {
+            Node::Hallway(Some(a)) => Some(a),
+            Node::Home(_, Some(a)) => Some(a),
+            _ => None,
+        }
+    }
+
+    fn clear(&mut self, i: usize) {
+        match &self.nodes[i] {
+            Node::Hallway(Some(_)) => {
+                self.nodes[i] = Node::Hallway(None);
+            }
+            Node::Home(t, Some(_)) => {
+                self.nodes[i] = Node::Home(*t, None);
+            }
+            _ => panic!("can't clear"),
+        }
+    }
+
+    fn place(&mut self, i: usize, a: &Amphipods) {
+        match &self.nodes[i] {
+            Node::Hallway(None) => {
+                self.nodes[i] = Node::Hallway(Some(*a));
+            }
+            Node::Home(t, None) => {
+                self.nodes[i] = Node::Home(*t, Some(*a));
+            }
+            _ => panic!("can't place"),
+        }
+    }
+
+    fn try_move(&self, from: usize, to: usize) -> Option<Self> {
+        let from_type = self.get_type(from).unwrap();
+        let mut visited = HashSet::new();
+        let mut stack = vec![];
+        stack.push((from, 0));
+        while let Some((current, cost)) = stack.pop() {
+            if visited.contains(&current) {
+                continue;
+            }
+            visited.insert(current);
+            if current == to {
+                let mut new_graph = self.clone();
+                new_graph.clear(from);
+                new_graph.place(to, from_type);
+                new_graph.cost += cost;
+                // println!("moved from {:?} to {:?}", &self.nodes[from], &self.nodes[to]);
+                return Some(new_graph);
+            }
+            for i in &self.edges[current] {
+                match &self.nodes[*i] {
+                    Node::Hallway(None) | Node::HallwayMoveOnly | Node::Home(_, None) => {
+                        stack.push((*i, cost + from_type.cost()));
+                    }
+                    _ => (),
+                }
+            }
+        }
+        None
+    }
+
+    fn get_open_hallways(&self) -> Vec<usize> {
+        let mut result = vec![];
+        for (i, node) in self.nodes.iter().enumerate() {
+            if let Node::Hallway(None) = node {
+                result.push(i);
+            }
+        }
+        result
+    }
+
+    fn next_states(&self) -> Vec<Self> {
         let mut results = vec![];
         for (i, node) in self.nodes.iter().enumerate() {
-            if let Node::Home(t, _) =  node {
-                if t == a {
-                    results.push(i);
+            match node {
+                Node::Hallway(Some(a)) => {
+                    if self.are_homes_available(a) {
+                        let (top_home, bot_home) = self.get_homes(a);
+                        if let Some(next) = self.try_move(i, bot_home) {
+                            results.push(next);
+                            continue;
+                        }
+                        if let Some(next) = self.try_move(i, top_home) {
+                            results.push(next);
+                            continue;
+                        }
+                    }
                 }
+                Node::Home(h, Some(a)) => {
+                    if h != a {
+                        if self.are_homes_available(a) {
+                            let (top_home, bot_home) = self.get_homes(a);
+                            if let Some(next) = self.try_move(i, bot_home) {
+                                results.push(next);
+                                continue;
+                            }
+                            if let Some(next) = self.try_move(i, top_home) {
+                                results.push(next);
+                                continue;
+                            }
+                        }
+                        for j in self.get_open_hallways() {
+                            if let Some(next) = self.try_move(i, j) {
+                                results.push(next);
+                            }
+                        }
+                    } else {
+                        let (_, bot_home) = self.get_homes(a);
+                        if let Some(bot_type) = self.get_type(bot_home) {
+                            if bot_type != a {
+                                for j in self.get_open_hallways() {
+                                    if let Some(next) = self.try_move(i, j) {
+                                        results.push(next);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => (),
             }
         }
         results
@@ -98,11 +288,27 @@ impl Graph {
 }
 
 fn main() {
-    let initial_positions = vec!['B', 'C', 'B', 'D', 'A', 'D', 'C', 'A'];
-    // let initial_positions = vec!['A', 'B', 'C', 'D', 'A', 'B', 'C', 'D'];
-    let graph = Graph::new();
-    println!("graph: {:?}", graph);
-    // let map = Map::new(initial_positions);
-    // println!("{:?}", &map);
-    // println!("complete: {}", map.is_complete());
+    let initial_positions = ['D', 'A', 'C', 'D',
+                             'C', 'A', 'B', 'B'];
+    let graph = Graph::new(&initial_positions);
+    let mut lowest_cost = u64::MAX;
+    let mut graphs = vec![graph];
+    while !graphs.is_empty() {
+        let mut new_graphs = vec![];
+        for graph in &graphs {
+            for next_graph in graph.next_states() {
+                if next_graph.is_complete() {
+                    if next_graph.cost < lowest_cost {
+                        lowest_cost = next_graph.cost;
+                    }
+                } else {
+                    if next_graph.cost < lowest_cost {
+                        new_graphs.push(next_graph);
+                    }
+                }
+            }
+        }
+        graphs = new_graphs;
+    }
+    println!("lowest_cost: {:?}", lowest_cost);
 }
