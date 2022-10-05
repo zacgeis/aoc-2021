@@ -317,7 +317,7 @@ fn main() {
             heap.push(next_graph);
         }
         counter += 1;
-        if counter >= 100000 {
+        if counter >= 10000 {
             let mut compact = HashMap::new();
             for graph in heap.drain() {
                 let cost = graph.cost;
