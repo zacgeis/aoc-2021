@@ -317,20 +317,22 @@ fn main() {
             heap.push(next_graph);
         }
         counter += 1;
-        if counter >= 10000 {
+        if counter >= 10_000 {
             let mut compact = HashMap::new();
-            for graph in heap.drain() {
+            for mut graph in heap.drain() {
                 let cost = graph.cost;
+                graph.cost = 0;
                 let value = compact.entry(graph).or_insert(u64::MAX);
                 if cost < *value {
                     *value = cost;
                 }
             }
-            for (graph, _) in compact {
+            for (mut graph, cost) in compact {
+                graph.cost = cost;
                 heap.push(graph);
             }
             counter = 0;
         }
     }
-    println!("lowest_cost: {:?}", lowest_cost);
+    println!("part1: {}", lowest_cost);
 }
