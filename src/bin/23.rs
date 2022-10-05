@@ -1,4 +1,5 @@
-use std::collections::HashSet;
+use std::cmp::Ordering;
+use std::collections::{HashSet, BinaryHeap, HashMap};
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 enum Amphipods {
@@ -31,18 +32,30 @@ impl Amphipods {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 enum Node {
     Hallway(Option<Amphipods>),
     HallwayMoveOnly,
     Home(Amphipods, Option<Amphipods>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 struct Graph {
     cost: u64,
     nodes: Vec<Node>,
     edges: Vec<Vec<usize>>,
+}
+
+impl Ord for Graph {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other.cost.cmp(&self.cost)
+    }
+}
+
+impl PartialOrd for Graph {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl Graph {
@@ -291,24 +304,33 @@ fn main() {
     let initial_positions = ['D', 'A', 'C', 'D',
                              'C', 'A', 'B', 'B'];
     let graph = Graph::new(&initial_positions);
+    let mut heap = BinaryHeap::new();
+    heap.push(graph);
     let mut lowest_cost = u64::MAX;
-    let mut graphs = vec![graph];
-    while !graphs.is_empty() {
-        let mut new_graphs = vec![];
-        for graph in &graphs {
-            for next_graph in graph.next_states() {
-                if next_graph.is_complete() {
-                    if next_graph.cost < lowest_cost {
-                        lowest_cost = next_graph.cost;
-                    }
-                } else {
-                    if next_graph.cost < lowest_cost {
-                        new_graphs.push(next_graph);
-                    }
+    let mut counter = 0;
+    while let Some(graph) = heap.pop() {
+        if graph.is_complete() {
+            lowest_cost = graph.cost;
+            break;
+        }
+        for next_graph in graph.next_states() {
+            heap.push(next_graph);
+        }
+        counter += 1;
+        if counter >= 100000 {
+            let mut compact = HashMap::new();
+            for graph in heap.drain() {
+                let cost = graph.cost;
+                let value = compact.entry(graph).or_insert(u64::MAX);
+                if cost < *value {
+                    *value = cost;
                 }
             }
+            for (graph, _) in compact {
+                heap.push(graph);
+            }
+            counter = 0;
         }
-        graphs = new_graphs;
     }
     println!("lowest_cost: {:?}", lowest_cost);
 }
